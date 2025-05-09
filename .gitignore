@@ -12,3 +12,4 @@ cvs.py
 .ipynb_checkpoints
 .vscode
 node_modules
+*.sql

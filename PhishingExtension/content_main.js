@@ -1,31 +1,6 @@
 import { predictUrl } from "./url_prediction.mjs";
 import { predictHtml } from "./html_prediction.mjs";
-
-/* ──────────  1. lightweight heuristic  ────────── */
-function heuristicScore(url) {
-  const u = new URL(url);
-  const sub = u.hostname.split(".").slice(0, -2).join(".");
-
-  const freeHosts = [
-    "000webhost",
-    "freehostia",
-    "neocities",
-    "wordpress",
-    "blogspot",
-    "netlify",
-    "weebly",
-    "github",
-    "weeblysite",
-  ];
-  const hasHyphen = url.includes("-");
-  const isFree = freeHosts.some((d) => u.hostname.endsWith(d));
-
-  let score = 0;
-  if (sub.length > 5) score += 0.5;
-  if (isFree || hasHyphen) score += 0.5;
-
-  return score;
-}
+import { scorePhishingURL } from "./heuristic_prediction.mjs";
 
 /* ──────────  2 & 3. model cascade  ────────── */
 export async function main() {
@@ -34,12 +9,9 @@ export async function main() {
   const host = location.hostname;
 
   /* 1 ▸ heuristic */
-  const hScore = heuristicScore(url);
-  if (hScore >= 0.95) {
+  const hScore = scorePhishingURL(url);
+  if (hScore >= 31) {
     report({ stage: "heuristic", probHeur: hScore, verdict: true });
-    return;
-  } else if (hScore <= 0.05) {
-    report({ stage: "heuristic", probHeur: hScore, verdict: false });
     return;
   }
 
@@ -55,7 +27,7 @@ export async function main() {
 
   const pHtml = await predictHtml(html, host);
 
-  const finalVerdict = pHtml >= 0.5 ? true : false;
+  const finalVerdict = pHtml >= 0.6513 ? true : false;
 
   report({
     stage: "htmlModel",

@@ -1,0 +1,19 @@
+body {
+    font-family: system-ui, sans-serif;
+    margin: 0; padding: 12px;
+    min-width: 230px;
+  }
+  .card {
+    border-radius: 12px;
+    padding: 16px;
+    color: #fff;
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,.2);
+    transition: background-color .3s;
+  }
+  .card.safe   { background: #29c26b; }
+  .card.phish  { background: #e84d4d; }
+  .card.wait   { background: #888; }
+  h1 { margin: 0 0 6px; font-size: 20px; }
+  p  { margin: 0; font-size: 13px; }
+  

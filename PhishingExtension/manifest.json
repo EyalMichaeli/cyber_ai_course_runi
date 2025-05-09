@@ -18,17 +18,23 @@
     "service_worker": "background.js",
     "type": "module"
   },
+
+  "action": {
+    "default_popup": "popup/popup.html"
+  },
   "web_accessible_resources": [
     {
       "resources": [
         "content_main.js",
         "url_prediction.mjs",
         "html_prediction.mjs",
+        "heuristic_prediction.mjs",
         "url_feature_extract.mjs",
         "html_feature_extract.mjs",
         "models/url_xgb.onnx",
         "models/html_xgb.onnx",
         "libs/onnxruntime-web/dist/*"
+        
       ],
       "matches": ["<all_urls>"]
     }

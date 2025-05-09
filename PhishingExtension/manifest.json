@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Phishing Detector",
+  "version": "1.0",
+  "description": "Combine URL- and HTML-based models to spot phishing",
+
+  "host_permissions": ["<all_urls>"],
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content_script.mjs"],
+      "run_at": "document_idle",
+      "type": "module"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content_main.js",
+        "url_prediction.mjs",
+        "html_prediction.mjs",
+        "url_feature_extract.mjs",
+        "html_feature_extract.mjs",
+        "models/url_xgb.onnx",
+        "models/html_xgb.onnx",
+        "libs/onnxruntime-web/dist/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

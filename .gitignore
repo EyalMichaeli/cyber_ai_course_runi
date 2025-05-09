@@ -1,1 +1,14 @@
 *.csv
+data/dataset-part-1/*.html
+cyberai
+.idea
+model_artifacts*
+data
+cvs.py
+*.zip
+.gitignore
+.DS_Store
+*.joblib
+.ipynb_checkpoints
+.vscode
+node_modules

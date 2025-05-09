@@ -1,0 +1,14 @@
+{
+  "name": "phishingextension",
+  "version": "1.0.0",
+  "description": "",
+  "main": "background.js",
+  "scripts": {
+    "build": "esbuild PhishingExtension/content_script.mjs --bundle --outfile=PhishingExtension/content_script.bundle.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "onnxruntime-web": "^1.21.1"
+  }
+}

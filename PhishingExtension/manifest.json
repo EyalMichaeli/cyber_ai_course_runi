@@ -35,6 +35,7 @@
         "html_feature_extract.mjs",
         "models/url_xgb.onnx",
         "models/url_xgb.json",
+        "models/html_xgb.json",
         "models/html_xgb.onnx",
         "libs/onnxruntime-web/ort-wasm-simd.wasm",
         "libs/onnxruntime-web/ort.wasm.min.js",

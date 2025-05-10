@@ -17,7 +17,7 @@ export async function main() {
 
   /* 2 ▸ URL model */
   const pUrl = await predictUrl(url);
-  if (pUrl >= 0.9) {
+  if (pUrl >= 0.85) {
     report({ stage: "urlModel", probUrl: pUrl, verdict: true });
     return;
   } else if (pUrl <= 0.1) {

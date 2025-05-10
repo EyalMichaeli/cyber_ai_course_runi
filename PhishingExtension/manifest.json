@@ -18,7 +18,9 @@
     "service_worker": "background.js",
     "type": "module"
   },
-
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
   "action": {
     "default_popup": "popup/popup.html"
   },
@@ -32,9 +34,13 @@
         "url_feature_extract.mjs",
         "html_feature_extract.mjs",
         "models/url_xgb.onnx",
+        "models/url_xgb.json",
         "models/html_xgb.onnx",
-        "libs/onnxruntime-web/dist/*"
-        
+        "libs/onnxruntime-web/ort-wasm-simd.wasm",
+        "libs/onnxruntime-web/ort.wasm.min.js",
+        "libs/onnxruntime-web/ort-wasm.wasm",
+        "libs/onnxruntime-web/ort.wasm.js",
+        "libs/onnxruntime-web/ort-wasm-threaded.wasm"
       ],
       "matches": ["<all_urls>"]
     }

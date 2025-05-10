@@ -2,17 +2,15 @@ import {
   extractUrlFeatures_v4,
   FEATURE_ORDER,
 } from "./url_feature_extract.mjs";
-import * as ort from "./libs/onnxruntime-web/dist/ort.wasm.min.mjs"; // ← namespace
-const { InferenceSession, Tensor } = ort; // classes
+import * as ort from "./libs/onnxruntime-web/ort.wasm.min.js";
+const { InferenceSession, Tensor } = ort;
 
-// wasm-backend flags must be set *before* you create the first session
-ort.env.wasm.simd = false; // avoid SIMD+threads binary
-ort.env.wasm.numThreads = 1; // single-thread works in extensions
-ort.env.wasm.wasmPaths = chrome.runtime.getURL(
-  "libs/onnxruntime-web/dist/" // folder that contains ort-wasm.wasm
-);
-
+/* single-thread, safe for GitHub */
+ort.env.wasm.proxy = false;
+ort.env.wasm.numThreads = 1;
+ort.env.wasm.wasmPaths = chrome.runtime.getURL("libs/onnxruntime-web/");
 let session;
+
 async function getSession() {
   if (session) return session;
   const buf = await fetch(chrome.runtime.getURL("models/url_xgb.onnx")).then(

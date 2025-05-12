@@ -1,55 +1,10 @@
-// import * as ort from "./libs/onnxruntime-web/ort.wasm.min.js"; // ← namespace
-// const { InferenceSession, Tensor } = ort; // classes
-
-// import { extractHtmlFeatures, FEATURE_COUNT } from "./html_feature_extract.mjs";
-
-// ort.env.wasm.proxy = false;
-// ort.env.wasm.numThreads = 1;
-
-// let htmlSess;
-// async function getHtmlSession() {
-//   if (!htmlSess) {
-//     const buf = await fetch(chrome.runtime.getURL("models/html_xgb.onnx")).then(
-//       (r) => r.arrayBuffer()
-//     );
-//     htmlSess = await ort.InferenceSession.create(buf);
-//   }
-//   return htmlSess;
-// }
-
-// export async function predictHtml(html, domain) {
-//   const s = await getHtmlSession();
-//   const feats = extractHtmlFeatures(html, domain);
-//   const input = new ort.Tensor("float32", feats, [1, FEATURE_COUNT]);
-//   const { probabilities } = await s.run({ input });
-//   return 1 - probabilities.data[0];
-// }
 /* ──────────  html_prediction.mjs  ────────── */
 
-import * as ort from "./libs/onnxruntime-web/ort.wasm.min.js";
 import { extractHtmlFeatures, FEATURE_COUNT } from "./html_feature_extract.mjs";
 
-/* ---------- ONNX env: CSP‑safe single‑thread ---------- */
-ort.env.wasm.proxy = false;
-ort.env.wasm.numThreads = 1;
-ort.env.wasm.simd = false; // optional
-ort.env.wasm.wasmPaths = chrome.runtime.getURL("libs/onnxruntime-web/");
 
 /* ---------- lazy caches ---------- */
-let ortSessionPromise = null;
 let jsBoosterPromise = null;
-
-/* ---------- helper: ONNX session ---------- */
-async function getOrtSession() {
-  if (ortSessionPromise) return ortSessionPromise;
-  ortSessionPromise = (async () => {
-    const buf = await fetch(chrome.runtime.getURL("models/html_xgb.onnx")).then(
-      (r) => r.arrayBuffer()
-    );
-    return ort.InferenceSession.create(buf);
-  })();
-  return ortSessionPromise;
-}
 
 /* ---------- helper: pure‑JS booster ---------- */
 function loadJsBooster() {
@@ -103,17 +58,6 @@ function buildPureJsBooster(modelJson) {
 /* ---------- public API ---------- */
 export async function predictHtml(html, domain) {
   const featsArr = extractHtmlFeatures(html, domain); // Float32Array
-  /* ①  ONNX fast path */
-  try {
-    const session = await getOrtSession(); // may reject
-    const input = new ort.Tensor("float32", featsArr, [1, FEATURE_COUNT]);
-    const { probabilities } = await session.run({ input });
-    return 1 - probabilities.data[0]; // phishing prob
-  } catch (e) {
-    console.warn("HTML ORT failed – falling back to pure JS", e);
-  }
-
-  /* ②  Pure‑JS fallback (no WASM, cannot fail on CSP) */
   const booster = await loadJsBooster();
   return booster.predict(featsArr); // same 0‑1 scale
 }

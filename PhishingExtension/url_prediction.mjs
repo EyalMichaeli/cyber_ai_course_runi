@@ -2,27 +2,8 @@ import {
   extractUrlFeatures_v4,
   FEATURE_ORDER,
 } from "./url_feature_extract.mjs";
-import * as ort from "./libs/onnxruntime-web/ort.wasm.min.js";
 
-ort.env.wasm.proxy = false;
-ort.env.wasm.numThreads = 1; // keep it CSP-safe
-ort.env.wasm.simd = false; // optional
-ort.env.wasm.wasmPaths = chrome.runtime.getURL("libs/onnxruntime-web/");
-
-let ortSessionPromise = null; // cache across calls
-let jsBoosterPromise = null; // ditto
-
-/* ---------- helper: ONNX session ---------- */
-async function getOrtSession() {
-  if (ortSessionPromise) return ortSessionPromise;
-  ortSessionPromise = (async () => {
-    const buf = await fetch(chrome.runtime.getURL("models/url_xgb.onnx")).then(
-      (r) => r.arrayBuffer()
-    );
-    return ort.InferenceSession.create(buf);
-  })();
-  return ortSessionPromise;
-}
+let jsBoosterPromise = null; 
 
 /* ---------- helper: JS booster (no WASM) ---------- */
 function loadJsBooster() {
@@ -86,16 +67,6 @@ function buildPureJsBooster(modelJson) {
 
 export async function predictUrl(urlString) {
   const feats = Float32Array.from(extractUrlFeatures_v4(urlString));
-
-  /* ①   Try ONNX */
-  try {
-    const session = await getOrtSession(); // may reject
-    const input = new ort.Tensor("float32", feats, [1, FEATURE_ORDER.length]);
-    const { probabilities } = await session.run({ input });
-    return 1 - probabilities.data[0]; // phishing prob
-  } catch (e) {
-    console.warn("ORT failed – falling back to pure JS", e);
-  }
 
   /* ②   Pure-JS fallback (cannot throw) */
   const booster = await loadJsBooster();

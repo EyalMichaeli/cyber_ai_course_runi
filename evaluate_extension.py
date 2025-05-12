@@ -18,11 +18,11 @@ EXT_PATH      = Path(
 ).resolve()
 
 PRED_ACTION    = "PredictionReady"
-CONCURRENCY    = 15
-PAGE_TIMEOUT   = 30_000   # ms – navigation
-RESULT_TIMEOUT = 15       # s  – wait for verdict
-LOAD_DEADLINE  = 7        # s  – wait for load
-PAGE_LIMIT     = 1_500    # successful verdicts desired
+CONCURRENCY    = 20
+PAGE_TIMEOUT   = 50_000   # ms – navigation
+RESULT_TIMEOUT = 40      # s  – wait for verdict
+LOAD_DEADLINE  = 40        # s  – wait for load
+PAGE_LIMIT     = 3_500    # successful verdicts desired
 REPORT_EVERY   = 50       # interim report cadence
 # ──────────────────────────────────────────────────────────
 
@@ -79,16 +79,21 @@ async def main():
 
             async def mini_report(tag):
                 nonlocal TP, FP, TN, FN, processed, total_latency, total_heap_mb
-                total = max(1, TP + TN + FP + FN)
-                coverage = TP / (TP + FN) if TP + FN else 0
-                error_rate = FP / (FP + TN) if FP + TN else 0
+                # Recall
+                coverage = TP / (TP + FN) if (TP + FN) else 0
+                # Precision
+                precision = TP / (TP + FP) if (TP + FP) else 0
+                # Response time (ms)
                 avg_lat = total_latency / processed if processed else 0
+                # Memory (MB)
                 avg_mem = total_heap_mb / processed if processed else 0
+
                 print(f"\n— {tag} ({processed} verdicts) —")
-                print(f"Coverage (Recall): {coverage:.3f}")
-                print(f"Error Rate       : {error_rate:.3f}")
-                print(f"Avg Latency (ms) : {avg_lat:.1f}")
-                print(f"Avg Mem (MB)     : {avg_mem:.1f}\n")
+                print(f"Coverage (Recall) : {coverage:.3f}")
+                print(f"Precision         : {precision:.3f}")
+                print(f"Avg Latency (ms)  : {avg_lat:.1f}")
+                print(f"Avg Mem (MB)      : {avg_mem:.1f}\n")
+
 
             async def evaluate(idx, url, html_path, label):
                 nonlocal TP, FP, TN, FN, processed, total_latency, total_heap_mb

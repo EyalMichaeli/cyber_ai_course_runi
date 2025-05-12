@@ -1,11 +1,11 @@
 /* background.js  (already a module) */
 const verdictByTab = new Map();
 
-chrome.runtime.onMessage.addListener((msg, sender) => {
-  if (msg.action === "PredictionReady" && sender.tab) {
-    verdictByTab.set(sender.tab.id, msg.result); // store latest verdict
-  }
-});
+// chrome.runtime.onMessage.addListener((msg, sender) => {
+//   if (msg.action === "PredictionReady" && sender.tab) {
+//     verdictByTab.set(sender.tab.id, msg.result); // store latest verdict
+//   }
+// });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "PopupQuery") {
@@ -16,17 +16,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((msg, sender) => {
-  if (msg.action === "PredictionReady") {
-    chrome.runtime.sendMessage({ action: "FromExtension", data: msg.result }, () => {});
+// chrome.runtime.onMessage.addListener((msg, sender) => {
+//   if (msg.action === "PredictionReady") {
+//     chrome.runtime.sendMessage({ action: "FromExtension", data: msg.result }, () => {});
 
-    console.log(
-      JSON.stringify({
-        action: "PredictionReady",
-        verdict:  msg.result.verdict,
-        probUrl:  msg.result.probUrl,
-        probHtml: msg.result.probHtml
-      })
-    );
-  }
-});
+//     console.log(
+//       JSON.stringify({
+//         action: "PredictionReady",
+//         verdict:  msg.result.verdict,
+//         probUrl:  msg.result.probUrl,
+//         probHtml: msg.result.probHtml
+//       })
+//     );
+//   }
+// });

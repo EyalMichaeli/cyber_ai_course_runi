@@ -17,7 +17,7 @@ export async function main() {
 
   /* 2 ▸ URL model */
   const pUrl = await predictUrl(url);
-  if (pUrl >= 0.85) {
+  if (pUrl >= 0.8) {
     report({ stage: "urlModel", probUrl: pUrl, verdict: true });
     return;
   } else if (pUrl <= 0.1) {
@@ -41,4 +41,12 @@ export async function main() {
 function report(payload) {
   console.log("[PhishCascade]", payload);
   chrome.runtime.sendMessage({ action: "PredictionReady", result: payload });
+  console.log(
+    JSON.stringify({
+      action: "PredictionReady",
+      verdict: payload.verdict,
+      probUrl: payload.probUrl,
+      probHtml: payload.probHtml,
+    })
+  );
 }

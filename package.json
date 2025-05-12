@@ -1,12 +1,15 @@
 {
   "dependencies": {
+    "csv-parse": "^5.6.0",
     "imurmurhash": "^0.1.4",
     "jsdom": "^26.1.0",
     "ml-xgboost": "^1.1.2",
     "murmurhash": "^2.0.1",
-    "onnxruntime-node": "^1.21.1"
+    "onnxruntime-node": "^1.21.1",
+    "puppeteer": "^24.8.2"
   },
   "devDependencies": {
     "esbuild": "^0.25.4"
-  }
+  },
+  "type": "module"
 }

@@ -15,3 +15,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true; // async response
   }
 });
+
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg.action === "PredictionReady") {
+    chrome.runtime.sendMessage({ action: "FromExtension", data: msg.result }, () => {});
+
+    console.log(
+      JSON.stringify({
+        action: "PredictionReady",
+        verdict:  msg.result.verdict,
+        probUrl:  msg.result.probUrl,
+        probHtml: msg.result.probHtml
+      })
+    );
+  }
+});

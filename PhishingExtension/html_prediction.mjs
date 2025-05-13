@@ -1,46 +1,39 @@
-/* ──────────  html_prediction.mjs  ────────── */
+/* ────────── html_prediction.mjs ────────── */
 
-import { extractHtmlFeatures, FEATURE_COUNT } from "./html_feature_extract.mjs";
+import { extractHtmlFeatures } from "./html_feature_extract.mjs";
 
-
-/* ---------- lazy caches ---------- */
-let jsBoosterPromise = null;
-
-/* ---------- helper: pure‑JS booster ---------- */
-function loadJsBooster() {
-  if (jsBoosterPromise) return jsBoosterPromise;
-  jsBoosterPromise = fetch(chrome.runtime.getURL("models/html_xgb.json"))
+/* ---------- lazy-load model ---------- */
+let boosterP = null;
+function loadBooster() {
+  if (boosterP) return boosterP;
+  boosterP = fetch(chrome.runtime.getURL("models/xgb_final_model.json"))
     .then((r) => r.json())
-    .then((json) => buildPureJsBooster(json));
-  return jsBoosterPromise;
+    .then(buildPureJsBooster);
+  return boosterP;
 }
 
-/* ---------- flat‑array tree evaluator ---------- */
+/* ---------- pure-JS XGBoost evaluator ---------- */
 function buildPureJsBooster(modelJson) {
   const trees =
     modelJson.learner?.gradient_booster?.model?.trees ?? modelJson.trees;
-
-  if (!Array.isArray(trees))
-    throw new Error("Unsupported XGBoost JSON: no 'trees' array found");
+  if (!Array.isArray(trees)) throw new Error("Bad XGB JSON: no trees array");
 
   const forest = trees.map((t) => ({
-    L: t.left_children, // int[]  left child (‑1 → leaf)
-    R: t.right_children, // int[]  right child (‑1 → leaf)
-    F: t.split_indices, // int[]  feature index
-    T: t.split_conditions, // float[] threshold
-    W: t.base_weights, // float[] leaf value (log‑odds)
-    D: t.default_left, // bool[] missing→left?
+    L: t.left_children,
+    R: t.right_children,
+    F: t.split_indices,
+    T: t.split_conditions,
+    W: t.base_weights,
+    D: t.default_left,
   }));
 
   function evalTree(tree, feats) {
-    let n = 0; // root node
+    let n = 0;
     while (tree.L[n] !== -1) {
-      // until leaf
-      const fIdx = tree.F[n];
-      const thresh = tree.T[n];
-      const val = feats[fIdx];
-      const goLeft = Number.isNaN(val) ? tree.D[n] : val < thresh;
-      n = goLeft ? tree.L[n] : tree.R[n];
+      const f = tree.F[n],
+        th = tree.T[n],
+        v = feats[f];
+      n = (Number.isNaN(v) ? tree.D[n] : v < th) ? tree.L[n] : tree.R[n];
     }
     return tree.W[n];
   }
@@ -48,16 +41,16 @@ function buildPureJsBooster(modelJson) {
   return {
     /** @param {Float32Array} feats */
     predict(feats) {
-      let score = 0;
-      for (const tree of forest) score += evalTree(tree, feats);
-      return 1 / (1 + Math.exp(-score)); // logistic ↦ probability
+      let logOdds = 0;
+      for (const tr of forest) logOdds += evalTree(tr, feats);
+      return 1 / (1 + Math.exp(-logOdds));
     },
   };
 }
 
 /* ---------- public API ---------- */
-export async function predictHtml(html, domain) {
-  const featsArr = extractHtmlFeatures(html, domain); // Float32Array
-  const booster = await loadJsBooster();
-  return booster.predict(featsArr); // same 0‑1 scale
+export async function predictHtml(html, domain = "") {
+  const feats = extractHtmlFeatures(html, domain);
+  const booster = await loadBooster();
+  return booster.predict(feats); // probability 0-1
 }

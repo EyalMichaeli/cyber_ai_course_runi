@@ -37,11 +37,7 @@
         "models/url_xgb.json",
         "models/html_xgb.json",
         "models/html_xgb.onnx",
-        "libs/onnxruntime-web/ort-wasm-simd.wasm",
-        "libs/onnxruntime-web/ort.wasm.min.js",
-        "libs/onnxruntime-web/ort-wasm.wasm",
-        "libs/onnxruntime-web/ort.wasm.js",
-        "libs/onnxruntime-web/ort-wasm-threaded.wasm"
+        "models/xgb_final_model.json"
       ],
       "matches": ["<all_urls>"]
     }

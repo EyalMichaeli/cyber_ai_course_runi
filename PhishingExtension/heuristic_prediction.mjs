@@ -1,5 +1,6 @@
 const TOP_DOMAINS = new Set([
   "google.com",
+  "google.com/maps",
   "bing.com",
   "yahoo.com",
   "duckduckgo.com",
@@ -23,6 +24,7 @@ const TOP_DOMAINS = new Set([
   "openai.com",
   "gmail.com",
   "outlook.com",
+  "chatgpt.com",
 ]);
 
 // ---------- extra allow-list (high-traffic but not in TOP_DOMAINS) -----
@@ -93,12 +95,12 @@ function isGoogleMapsCoords(path) {
 
 /* MAIN -----------------------------------------------------------------*/
 export function scorePhishingURL(url) {
-  let score = 0;
+  let score = 1;
   let parsed;
   try {
     parsed = new URL(url);
   } catch {
-    return 0;
+    return 1;
   }
 
   const host = parsed.hostname.toLowerCase();
@@ -114,7 +116,7 @@ export function scorePhishingURL(url) {
   if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host) || /^[0-9a-f:]+$/i.test(host))
     score += 20; // raw IP
 
-  if (host.startsWith("xn--") || /[^\x00-\x7F]/.test(host)) score += 15;
+  if (host.startsWith("xn--") || /[^\x00-\x7F]/.test(host)) score += 25;
 
   const tld = host.split(".").pop();
   if (BAD_TLDS.includes(tld)) score += 10;

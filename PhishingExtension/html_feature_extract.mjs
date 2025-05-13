@@ -1,178 +1,141 @@
-/*****************************************************************
- *  HTML → dense vector   (19 numeric + 2¹⁷ word-hash + 2¹⁶ char-hash)
- *  Mirrors the Python training code that used HashingVectorizer.
- *****************************************************************/
+/* ────────── html_feature_extract.mjs ────────── */
 
-/* ---------- numeric feature order (MUST stay exactly as trained) */
-export const NUM_ORDER = Object.freeze([
-  "forms",
-  "inputs",
-  "iframes",
-  "links",
-  "imgs",
-  "scripts",
-  "html_len",
-  "js_len",
-  "entropy",
-  "js_eval_cnt",
+const { DOMParser } = window;
+
+/* keep EXACT order for model (34 features) */
+export const NUM_ORDER = [
+  "forms","inputs","hidden_inputs","iframes","links","imgs","data_uri_imgs","scripts",
+  "html_len","inline_js_len","entropy_html","entropy_js",
+  "js_eval_cnt","js_suspicious_fn_cnt","num_event_handlers",
   "base64_cnt",
-  "link_ip",
-  "link_at",
-  "kw_cnt",
-  "inputs_per_form",
-  "iframe_ratio",
-  "js_html_ratio",
-  "ext_link_ratio",
-  "form_ext_action",
-]); // 19 items
-
-/* ---------- final vector length ---------- */
-export const WORD_BITS = 1 << 17; // 131 072
-export const CHAR_BITS = 1 << 16; // 65 536
-export const FEATURE_COUNT = NUM_ORDER.length + WORD_BITS + CHAR_BITS; // 196 627
-
-/* ---------- MurmurHash3 (32-bit) — minimal JS port -------------- */
-function murmur32(str, seed = 0) {
-  let h = seed ^ str.length;
-  for (let i = 0, k; i < str.length; i++) {
-    k = str.charCodeAt(i);
-    k =
-      ((k & 0xffff) * 0xcc9e2d51 +
-        ((((k >>> 16) * 0xcc9e2d51) & 0xffff) << 16)) >>>
-      0;
-    k = (k << 15) | (k >>> 17);
-    k =
-      ((k & 0xffff) * 0x1b873593 +
-        ((((k >>> 16) * 0x1b873593) & 0xffff) << 16)) >>>
-      0;
-    h ^= k;
-    h = (h << 13) | (h >>> 19);
-    h = (h * 5 + 0xe6546b64) >>> 0;
-  }
-  h ^= str.length;
-  h ^= h >>> 16;
-  h = (h * 0x85ebca6b) >>> 0;
-  h ^= h >>> 13;
-  h = (h * 0xc2b2ae35) >>> 0;
-  h ^= h >>> 16;
-  return h >>> 0;
-}
-
-/* ---------- helper regex / keyword lists (same as Python) -------- */
-const rxIP = /https?:\/\/\d{1,3}(?:\.\d{1,3}){3}/i;
-const rxAT = /https?:\/\/[^ ]+@/i;
-const rxB64 = /[A-Za-z0-9+/]{40,}={0,2}/g;
-const rxEval = /\b(eval|atob|document\.write|innerHTML\s*=)\b/gi;
-const KW = [
-  "account",
-  "bank",
-  "confirm",
-  "password",
-  "login",
-  "verify",
-  "credit card",
-  "ssn",
-  "urgent",
-  "immediately",
-  "click here",
-  "update",
+  "link_ip","link_at","punycode_link","js_href_link","num_ext_links","ext_link_ratio",
+  "form_empty_action","form_external_action","form_mailto",
+  "inputs_per_form","iframe_ratio","js_html_ratio",
+  "domain_len","domain_hyphen","domain_digit","tld_suspicious","favicon_ext","kw_cnt"
 ];
+export const FEATURE_COUNT = NUM_ORDER.length;
 
-/* ---------- Shannon entropy (first 20 kB only, like training) --- */
-export function shannonEntropy(str) {
-  if (!str) return 0;
+const KW_EN = ["account","bank","confirm","password","passw0rd","p@ssword","p@55w0rd","paxxword",
+  "login","verify","credit card","ssn","social security","urgent","immediately","click here",
+  "security","update","alert","expired","limited"];
+const KW_PT = ["conta","banco","confirmar","senha","iniciar sessão","verificar","urgente","clique aqui","atualize","segurança","aviso"];
+const KW_ES = ["cuenta","banco","confirmar","contraseña","iniciar sesión","verificar","urgente","haz clic aquí","actualiza","seguridad","aviso"];
+const KW_RU = ["аккаунт","банк","подтвердите","пароль","срочно","нажмите здесь","обновите","безопасность","ограничено"];
+const KW_ZH = ["账户","帐号","密码","登录","立即","点击","安全","验证","更新","警告"];
+const SUSPICIOUS_KW = [...KW_EN, ...KW_PT, ...KW_ES, ...KW_RU, ...KW_ZH];
+
+const SUSPICIOUS_FUNCS = ["eval(","atob(","unescape(","fromcharcode(","document.write(","settimeout(","setinterval("];
+const RISKY_TLDS = new Set([".xyz",".top",".pw",".kim",".buzz",".click",".loan",".work",
+  ".ru",".cn",".zip",".mov",".bond",".lol"]);
+
+const regexEscape = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const entropy = s => {
+  if (!s) return 0;
   const freq = {};
-  for (const c of str) freq[c] = (freq[c] || 0) + 1;
-  let ent = 0,
-    len = str.length;
+  for (const ch of s) freq[ch] = (freq[ch] || 0) + 1;
+  let h = 0, n = s.length;
   for (const k in freq) {
-    const p = freq[k] / len;
-    ent -= p * Math.log2(p);
+    const p = freq[k] / n;
+    h -= p * Math.log2(p);
   }
-  return ent;
-}
+  return h;
+};
 
-/* ---------- main extractor -------------------------------------- */
+/** @returns {Float32Array} features */
 export function extractHtmlFeatures(html, domain = "") {
-  /* 1 ▸ DOM parsing */
-  const dom = new DOMParser().parseFromString(html, "text/html");
-  const bodyText = dom.body ? dom.body.innerText.toLowerCase() : "";
-  const scripts = [...dom.getElementsByTagName("script")]
-    .map((t) => (t.textContent || "").toLowerCase())
-    .join(" ");
+  const doc = new DOMParser().parseFromString(html, "text/html");
 
-  /* 2 ▸ numeric features */
-  const num = {
-    forms: dom.getElementsByTagName("form").length,
-    inputs: dom.getElementsByTagName("input").length,
-    iframes: dom.getElementsByTagName("iframe").length,
-    links: dom.getElementsByTagName("a").length,
-    imgs: dom.getElementsByTagName("img").length,
-    scripts: dom.getElementsByTagName("script").length,
-    html_len: html.length,
-    js_len: scripts.length,
-    entropy: shannonEntropy(html.slice(0, 20000)),
-    js_eval_cnt: (scripts.match(rxEval) || []).length,
-    base64_cnt: (scripts.match(rxB64) || []).length,
-    link_ip: +rxIP.test(html),
-    link_at: +rxAT.test(html),
-    kw_cnt: KW.reduce((s, k) => s + bodyText.includes(k), 0),
-    inputs_per_form: 0,
-    iframe_ratio: 0,
-    js_html_ratio: 0,
-    ext_link_ratio: 0,
-    form_ext_action: 0,
-  };
-  num.inputs_per_form = num.inputs / Math.max(num.forms, 1);
-  num.iframe_ratio = num.iframes / Math.max(num.links + 1, 1);
-  num.js_html_ratio = num.js_len / Math.max(num.html_len, 1);
+  // counts
+  const forms = doc.querySelectorAll("form").length;
+  const inputs = doc.querySelectorAll("input").length;
+  const hidden = doc.querySelectorAll("input[type='hidden']").length;
+  const ifrs = doc.querySelectorAll("iframe").length;
+  const links = doc.querySelectorAll("a").length;
+  const imgs = doc.querySelectorAll("img").length;
+  const dataUri = [...doc.querySelectorAll("img[src^='data:image']")].length;
+  const scripts = doc.querySelectorAll("script").length;
 
-  if (domain) {
-    const aTags = [...dom.getElementsByTagName("a")];
-    const ext = aTags.filter(
-      (a) => a.href.startsWith("http") && !a.href.includes(domain)
-    ).length;
-    num.ext_link_ratio = ext / Math.max(num.links, 1);
+  // raw texts
+  const htmlLower = html.toLowerCase();
+  const inlineJs = [...doc.querySelectorAll("script:not([src])")]
+    .map(s => s.textContent || "").join(" ").toLowerCase();
 
-    for (const f of dom.getElementsByTagName("form")) {
-      const act = f.getAttribute("action") || "";
-      if (act.startsWith("http") && !act.includes(domain)) {
-        num.form_ext_action = 1;
-        break;
-      }
-    }
-  }
+  // link features
+  let ext = 0, linkIp = 0, linkAt = 0, jsHref = 0, puny = 0;
+  doc.querySelectorAll("a[href]").forEach(a => {
+    const h = a.getAttribute("href").toLowerCase();
+    if (domain && h.startsWith("http") && !h.includes(domain)) ext++;
+    if (/https?:\/\/\d{1,3}(?:\.\d{1,3}){3}/.test(h)) linkIp = 1;
+    if (h.includes("@") && !h.startsWith("mailto:")) linkAt = 1;
+    if (h.startsWith("javascript:")) jsHref = 1;
+    if (h.includes("xn--")) puny = 1;
+  });
+  const extRatio = links ? ext / links : 0;
 
-  /* 3 ▸ build dense Float32Array */
-  const vec = new Float32Array(FEATURE_COUNT);
-
-  /* numeric (0-18) */
-  NUM_ORDER.forEach((k, i) => {
-    vec[i] = num[k] || 0;
+  // forms
+  let emptyAct = 0, mailAct = 0, extAct = 0;
+  Array.from(doc.forms).forEach(f => {
+    const act = (f.getAttribute("action") || "").toLowerCase();
+    if (!act || act === "about:blank") emptyAct = 1;
+    if (act.startsWith("mailto:")) mailAct = 1;
+    if (domain && act.startsWith("http") && !act.includes(domain)) extAct = 1;
   });
 
-  /* 4 ▸ word hashing: unigrams & bigrams → 2¹⁷ buckets */
-  const wordOff = NUM_ORDER.length;
-  const tokens = bodyText.split(/\W+/).filter(Boolean);
-  for (let i = 0; i < tokens.length; ++i) {
-    const uni = murmur32(tokens[i], 1) & (WORD_BITS - 1);
-    vec[wordOff + uni] += 1;
-    if (i + 1 < tokens.length) {
-      const bi = murmur32(tokens[i] + " " + tokens[i + 1], 2) & (WORD_BITS - 1);
-      vec[wordOff + bi] += 1;
-    }
+  // favicon
+  let favExt = 0;
+  const icon = doc.querySelector("link[rel~='icon']");
+  if (icon && icon.href && domain) {
+    const h = icon.href.toLowerCase();
+    if (h.startsWith("http") && !h.includes(domain)) favExt = 1;
   }
 
-  /* 5 ▸ char hashing: 4-6-grams → 2¹⁶ buckets */
-  const charOff = wordOff + WORD_BITS;
-  const fullTxt = (bodyText + scripts).toLowerCase();
-  for (let n = 4; n <= 6; ++n) {
-    for (let i = 0; i + n <= fullTxt.length; ++i) {
-      const gram = fullTxt.slice(i, i + n);
-      const h = murmur32(gram, n) & (CHAR_BITS - 1);
-      vec[charOff + h] += 1;
-    }
+  // JS & obfuscation
+  const jsEvalCnt = (inlineJs.match(/eval\s*\(/g) || []).length;
+  const fnCnt = SUSPICIOUS_FUNCS.reduce((sum, fn) => {
+    const esc = regexEscape(fn);
+    const re = new RegExp(esc, "g");
+    return sum + (inlineJs.match(re) || []).length;
+  }, 0);
+  const evtCnt = (htmlLower.match(/\son\w+\s*=/g) || []).length;
+  const b64Cnt = (htmlLower.match(/base64[,;]/g) || []).length;
+
+  // ratios
+  const inputsPer = forms ? inputs / forms : 0;
+  const totalTags = doc.getElementsByTagName("*").length || 1;
+  const iframeRat = ifrs / totalTags;
+  const jsHtmlRat = html.length ? inlineJs.length / html.length : 0;
+
+  // domain features
+  let dLen = 0, dHy = 0, dDig = 0, tldSus = 0;
+  if (domain) {
+    const dm = domain.toLowerCase();
+    dLen = dm.length;
+    dHy = dm.includes("-") ? 1 : 0;
+    dDig = /\d/.test(dm) ? 1 : 0;
+    const tld = "." + dm.split(".").pop();
+    tldSus = RISKY_TLDS.has(tld) ? 1 : 0;
   }
 
+  // keywords
+  const text = doc.body ? doc.body.innerText.toLowerCase() : "";
+  const kwCnt = SUSPICIOUS_KW.reduce((sum, kw) => sum + (text.includes(kw) ? 1 : 0), 0);
+
+  // assemble
+  const obj = {
+    forms, inputs, hidden_inputs: hidden, iframes: ifrs, links, imgs,
+    data_uri_imgs: dataUri, scripts,
+    html_len: html.length, inline_js_len: inlineJs.length,
+    entropy_html: entropy(htmlLower), entropy_js: entropy(inlineJs),
+    js_eval_cnt: jsEvalCnt, js_suspicious_fn_cnt: fnCnt, num_event_handlers: evtCnt,
+    base64_cnt: b64Cnt,
+    link_ip: linkIp, link_at: linkAt, punycode_link: puny, js_href_link: jsHref,
+    num_ext_links: ext, ext_link_ratio: extRatio,
+    form_empty_action: emptyAct, form_external_action: extAct, form_mailto: mailAct,
+    inputs_per_form: inputsPer, iframe_ratio: iframeRat, js_html_ratio: jsHtmlRat,
+    domain_len: dLen, domain_hyphen: dHy, domain_digit: dDig, tld_suspicious: tldSus,
+    favicon_ext: favExt, kw_cnt: kwCnt
+  };
+  const vec = new Float32Array(FEATURE_COUNT);
+  NUM_ORDER.forEach((k,i) => vec[i] = obj[k] || 0);
   return vec;
 }

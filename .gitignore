@@ -13,3 +13,8 @@ cvs.py
 .vscode
 node_modules
 *.sql
+snapshots/*.html
+html_validation/training/Phish/*.html
+html_validation/training/NotPhish/*.html
+html_validation/validation/Phish/*.html
+html_validation/validation/NotPhish/*.html

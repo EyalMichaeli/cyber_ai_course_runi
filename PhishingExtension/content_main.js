@@ -2,6 +2,32 @@ import { predictUrl } from "./url_prediction.mjs";
 import { predictHtml } from "./html_prediction.mjs";
 import { scorePhishingURL } from "./heuristic_prediction.mjs";
 
+
+function getFinalVerdict(probUrl, probHtml) {
+  // Model reliability weights (adjust based on validation performance if available)
+  const wUrl = 0.5;   // weight for URL-based model
+  const wHtml = 0.5;  // weight for HTML-based model
+
+  // Compute confidence of each model's prediction (distance from 0.5)
+  const confUrl = Math.abs(probUrl - 0.5);
+  const confHtml = Math.abs(probHtml - 0.5);
+
+  // Optionally incorporate confidence into weights
+  let effectiveWUrl = wUrl * confUrl;
+  let effectiveWHtml = wHtml * confHtml;
+  if (effectiveWUrl + effectiveWHtml === 0) {
+    // If both scores are exactly 0.5 (no confidence), fall back to equal weights
+    effectiveWUrl = effectiveWHtml = 1;
+  }
+
+  // Calculate combined probability (weighted average)
+  const combinedProb = (effectiveWUrl * probUrl + effectiveWHtml * probHtml) / (effectiveWUrl + effectiveWHtml);
+
+  // Final decision based on combined probability and chosen threshold
+  const threshold = 0.5;  // can be tuned higher or lower based on desired sensitivity
+  return combinedProb >= threshold ? true : false;
+}
+
 /* ──────────  2 & 3. model cascade  ────────── */
 export async function main() {
   const url = location.href;
@@ -24,15 +50,21 @@ export async function main() {
     report({ stage: "urlModel", probUrl: pUrl, verdict: false });
     return;
   }
-
   const pHtml = await predictHtml(html, host);
-
-  const finalVerdict = pHtml >= 0.6513 ? true : false;
+  if (pHtml >= 0.8) {
+    report({ stage: "htmlModel", pHtml: pHtml, verdict: true });
+    return;
+  } else if (pHtml <= 0.1) {
+    report({ stage: "htmlModel", probHtml: pHtml, verdict: false });
+    return;
+  }
+  const finalVerdict = getFinalVerdict(pUrl, pHtml);
 
   report({
-    stage: "htmlModel",
+    stage: "finalVerdict",
     probUrl: pUrl,
     probHtml: pHtml,
+    probHeur: hScore,
     verdict: finalVerdict,
   });
 }
@@ -45,8 +77,10 @@ function report(payload) {
     JSON.stringify({
       action: "PredictionReady",
       verdict: payload.verdict,
+      probHeur: payload.probHeur,
       probUrl: payload.probUrl,
       probHtml: payload.probHtml,
+      stage: payload.stage,
     })
   );
 }
